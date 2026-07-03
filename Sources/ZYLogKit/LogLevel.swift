@@ -31,4 +31,23 @@ public enum LogLevel: Int, CaseIterable, Comparable, Sendable {
             return "CRITICAL"
         }
     }
+
+    public var emoji: String {
+        switch self {
+        case .trace:
+            return "🔎"
+        case .debug:
+            return "🛠️"
+        case .info:
+            return "ℹ️"
+        case .notice:
+            return "📌"
+        case .warning:
+            return "⚠️"
+        case .error:
+            return "❗"
+        case .critical:
+            return "🚨"
+        }
+    }
 }

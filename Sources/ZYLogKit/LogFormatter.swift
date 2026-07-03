@@ -10,15 +10,22 @@ public struct LogFormatter {
     }
 
     func format(_ event: LogEvent) -> String {
-        var components = [
+        var components: [String] = []
+
+        if includesSourceLocation {
+            components.append("[file:\(Self.fileName(from: event.file)):\(event.line)]")
+            components.append("[function:\(event.function)]")
+        }
+
+        components.append(contentsOf: [
             Self.formattedDate(event.date),
+            event.level.emoji,
             "[\(event.level.label)]",
             "[\(event.category.description)]",
-            "[session:\(event.sessionID)]",
             "[process:\(event.processName) pid:\(event.processID)]",
             "[thread:\(event.thread)]",
             event.message
-        ]
+        ])
 
         if includesMetadata, !event.metadata.isEmpty {
             let metadata = event.metadata
@@ -26,11 +33,6 @@ public struct LogFormatter {
                 .map { "\($0.key)=\($0.value)" }
                 .joined(separator: " ")
             components.append("{\(metadata)}")
-        }
-
-        if includesSourceLocation {
-            components.append("[source:\(event.file):\(event.line)]")
-            components.append("[function:\(event.function)]")
         }
 
         return components.joined(separator: " ")
@@ -42,6 +44,13 @@ public struct LogFormatter {
             dateFormatterLock.unlock()
         }
         return dateFormatter.string(from: date)
+    }
+
+    private static func fileName(from file: String) -> String {
+        file
+            .split(separator: "/")
+            .last
+            .map(String.init) ?? file
     }
 
     private static let dateFormatterLock = NSLock()
