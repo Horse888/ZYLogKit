@@ -183,6 +183,17 @@ final class ZYLogKitTests: XCTestCase {
         XCTAssertFalse(line.contains("[session:"))
     }
 
+    func testFormattedDateUsesLocalTimeZone() {
+        let date = Date(timeIntervalSince1970: 1_787_000_000)
+        let expectedFormatter = DateFormatter()
+        expectedFormatter.calendar = Calendar(identifier: .gregorian)
+        expectedFormatter.locale = Locale(identifier: "en_US_POSIX")
+        expectedFormatter.timeZone = .current
+        expectedFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS ZZZZZ"
+
+        XCTAssertEqual(LogFormatter.formattedDate(date), expectedFormatter.string(from: date))
+    }
+
     func testRecordResourceUsageIncludesCPUAndMemory() throws {
         let directory = try makeTemporaryDirectory()
         defer {

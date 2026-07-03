@@ -57,7 +57,7 @@ Each configured session starts with metadata such as session ID, OS, process nam
 `Log.configure` starts automatic resource monitoring by default. Every 30 seconds, ZYLogKit records the current app process CPU and memory usage:
 
 ```text
-[file:Log.swift:459] [function:recordAutomaticResourceUsage(_:monitoring:file:function:line:)] 2026-07-03T15:00:00.000Z ℹ️ [INFO] [RESOURCE] [process:Example pid:12345] [thread:background] Resource Usage {resource.cpu.percent=3.2 resource.memory.resident.mb=86.4 resource.memory.physical_footprint.mb=94.1}
+[file:Log.swift:459] [function:recordAutomaticResourceUsage(_:monitoring:file:function:line:)] 2026-07-03 23:00:00.000 +08:00 ℹ️ [INFO] [RESOURCE] [process:Example pid:12345] [thread:background] Resource Usage {resource.cpu.percent=3.2 resource.memory.resident.mb=86.4 resource.memory.physical_footprint.mb=94.1}
 ```
 
 You can change the interval or disable it:
