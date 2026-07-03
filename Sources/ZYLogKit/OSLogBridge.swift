@@ -5,20 +5,20 @@ import os
 #endif
 
 enum OSLogBridge {
-    static func write(_ event: LogEvent, configuration: LogConfiguration) {
+    static func write(_ line: String, event: LogEvent, configuration: LogConfiguration) {
         #if canImport(os)
         if #available(iOS 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, *) {
             let logger = Logger(
                 subsystem: configuration.subsystem,
                 category: event.category.rawValue
             )
-            logger.log(level: event.level.osLogType, "\(event.message, privacy: .public)")
+            logger.log(level: event.level.osLogType, "\(line, privacy: .public)")
         } else {
             os_log(
                 "%{public}@",
                 log: OSLog(subsystem: configuration.subsystem, category: event.category.rawValue),
                 type: event.level.osLogType,
-                event.message
+                line
             )
         }
         #endif

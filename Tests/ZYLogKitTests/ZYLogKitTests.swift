@@ -38,6 +38,7 @@ final class ZYLogKitTests: XCTestCase {
         XCTAssertTrue(content.contains("[INFO] [DATABASE]"))
         XCTAssertTrue(content.contains("Insert Word"))
         XCTAssertTrue(content.contains("TestKey: TestValue"))
+        XCTAssertTrue(content.contains("TestKey=TestValue"))
 
         let zipURL = try Log.export(to: directory)
         let zipData = try Data(contentsOf: zipURL)
@@ -96,6 +97,48 @@ final class ZYLogKitTests: XCTestCase {
         let content = try String(contentsOf: logFile, encoding: .utf8)
         XCTAssertTrue(content.contains("[PERFORMANCE]"))
         XCTAssertTrue(content.contains("Export PDF"))
+    }
+
+    func testLogLineIncludesDiagnosticContext() throws {
+        let directory = try makeTemporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        Log.configure(LogConfiguration(
+            subsystem: "tests.zylogkit",
+            logDirectory: directory,
+            isConsoleLoggingEnabled: false,
+            retention: .disabled,
+            metadataProvider: { ["UserID": "42"] }
+        ))
+
+        Log.warning(
+            "Context Check",
+            category: .sync,
+            metadata: ["RequestID": "abc"],
+            file: "Tests/ManualSource.swift",
+            function: "sampleFunction()",
+            line: 123
+        )
+        Log.flush()
+
+        let logFile = try XCTUnwrap(FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ).first { $0.pathExtension == "log" })
+        let content = try String(contentsOf: logFile, encoding: .utf8)
+
+        XCTAssertTrue(content.contains("[WARNING] [SYNC]"))
+        XCTAssertTrue(content.contains("Context Check"))
+        XCTAssertTrue(content.contains("[session:"))
+        XCTAssertTrue(content.contains("[process:"))
+        XCTAssertTrue(content.contains("pid:\(ProcessInfo.processInfo.processIdentifier)"))
+        XCTAssertTrue(content.contains("[thread:"))
+        XCTAssertTrue(content.contains("[source:Tests/ManualSource.swift:123]"))
+        XCTAssertTrue(content.contains("[function:sampleFunction()]"))
+        XCTAssertTrue(content.contains("RequestID=abc"))
+        XCTAssertTrue(content.contains("UserID=42"))
     }
 
     private func makeTemporaryDirectory() throws -> URL {

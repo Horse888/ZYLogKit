@@ -330,6 +330,12 @@ public enum Log {
             return
         }
 
+        var eventMetadata = configuration.metadataProvider()
+        metadata.forEach { key, value in
+            eventMetadata[key] = value
+        }
+
+        let processInfo = ProcessInfo.processInfo
         let event = LogEvent(
             date: Date(),
             level: level,
@@ -339,15 +345,19 @@ public enum Log {
             function: function,
             line: line,
             sessionID: session.id,
-            metadata: metadata
+            processName: processInfo.processName,
+            processID: processInfo.processIdentifier,
+            thread: currentThreadDescription(),
+            metadata: eventMetadata
         )
+        let formattedLine = formatter.format(event)
 
         if configuration.isConsoleLoggingEnabled, level >= configuration.consoleMinimumLevel {
-            OSLogBridge.write(event, configuration: configuration)
+            OSLogBridge.write(formattedLine, event: event, configuration: configuration)
         }
 
         if configuration.isFileLoggingEnabled, level >= configuration.fileMinimumLevel {
-            fileWriter.write(formatter.format(event), date: event.date, configuration: configuration)
+            fileWriter.write(formattedLine, date: event.date, configuration: configuration)
         }
 
         scheduleRetentionIfNeeded(configuration: configuration, now: event.date)
@@ -406,6 +416,18 @@ public enum Log {
             .joined(separator: "-")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return cleaned.isEmpty ? "attachment-\(UUID().uuidString)" : cleaned
+    }
+
+    private static func currentThreadDescription() -> String {
+        if Thread.isMainThread {
+            return "main"
+        }
+
+        if let name = Thread.current.name, !name.isEmpty {
+            return name
+        }
+
+        return "background"
     }
 
     private static func formatElapsedTime(from startedAt: Date, to endedAt: Date) -> String {

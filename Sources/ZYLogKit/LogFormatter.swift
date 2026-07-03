@@ -15,6 +15,8 @@ public struct LogFormatter {
             "[\(event.level.label)]",
             "[\(event.category.description)]",
             "[session:\(event.sessionID)]",
+            "[process:\(event.processName) pid:\(event.processID)]",
+            "[thread:\(event.thread)]",
             event.message
         ]
 
@@ -27,7 +29,8 @@ public struct LogFormatter {
         }
 
         if includesSourceLocation {
-            components.append("(\(event.file):\(event.line) \(event.function))")
+            components.append("[source:\(event.file):\(event.line)]")
+            components.append("[function:\(event.function)]")
         }
 
         return components.joined(separator: " ")
