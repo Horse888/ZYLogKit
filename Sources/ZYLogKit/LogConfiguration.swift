@@ -10,6 +10,7 @@ public struct LogConfiguration {
     public var isConsoleLoggingEnabled: Bool
     public var retention: LogRetention
     public var includesSessionHeader: Bool
+    public var resourceMonitoring: LogResourceMonitoringConfiguration
     public var metadataProvider: () -> [String: String]
 
     public init(
@@ -22,6 +23,7 @@ public struct LogConfiguration {
         isConsoleLoggingEnabled: Bool = true,
         retention: LogRetention = .default,
         includesSessionHeader: Bool = true,
+        resourceMonitoring: LogResourceMonitoringConfiguration = .default,
         metadataProvider: @escaping () -> [String: String] = { [:] }
     ) {
         self.subsystem = subsystem
@@ -33,6 +35,7 @@ public struct LogConfiguration {
         self.isConsoleLoggingEnabled = isConsoleLoggingEnabled
         self.retention = retention
         self.includesSessionHeader = includesSessionHeader
+        self.resourceMonitoring = resourceMonitoring
         self.metadataProvider = metadataProvider
     }
 

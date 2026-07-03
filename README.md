@@ -52,6 +52,32 @@ Application Support/<bundle id>/Logs/yyyy-MM-dd.log
 
 Each configured session starts with metadata such as session ID, OS, process name, bundle, version, and build.
 
+## Resource Monitoring
+
+`Log.configure` starts automatic resource monitoring by default. Every 30 seconds, ZYLogKit records the current app process CPU and memory usage:
+
+```text
+[INFO] [RESOURCE] Resource Usage {resource.cpu.percent=3.2 resource.memory.resident.mb=86.4 resource.memory.physical_footprint.mb=94.1}
+```
+
+You can change the interval or disable it:
+
+```swift
+Log.configure(LogConfiguration(
+    resourceMonitoring: LogResourceMonitoringConfiguration(interval: 15)
+))
+
+Log.configure(LogConfiguration(
+    resourceMonitoring: .disabled
+))
+```
+
+You can also record a sample manually at important points:
+
+```swift
+Log.recordResourceUsage()
+```
+
 ## Export
 
 ```swift

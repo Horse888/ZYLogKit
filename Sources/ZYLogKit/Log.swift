@@ -8,6 +8,7 @@ public enum Log {
     private static var currentSession = SessionContext.make(configuration: currentConfiguration)
     private static var timers: [String: Date] = [:]
     private static var lastRetentionCheck: Date?
+    private static var resourceMonitor: ResourceMonitor?
 
     public static var configuration: LogConfiguration {
         lock.withLock {
@@ -24,16 +25,21 @@ public enum Log {
     public static func configure(_ configuration: LogConfiguration) {
         let session = SessionContext.make(configuration: configuration)
 
-        lock.withLock {
+        let previousMonitor = lock.withLock {
+            let monitor = resourceMonitor
+            resourceMonitor = nil
             currentConfiguration = configuration
             currentSession = session
             timers.removeAll()
             lastRetentionCheck = nil
+            return monitor
         }
 
+        previousMonitor?.stop()
         fileWriter.close()
         writeSessionHeaderIfNeeded(configuration: configuration, session: session)
         scheduleRetentionIfNeeded(configuration: configuration, now: Date())
+        startResourceMonitoringIfNeeded(configuration.resourceMonitoring)
     }
 
     public static func startNewSession() {
@@ -293,6 +299,36 @@ public enum Log {
         fileWriter.flush()
     }
 
+    public static func recordResourceUsage(
+        file: String = #fileID,
+        function: String = #function,
+        line: UInt = #line
+    ) {
+        guard let snapshot = ResourceUsageSnapshot.current() else {
+            warning(
+                "Resource Usage Unavailable",
+                category: .resource,
+                metadata: ["resource.status": "unavailable"],
+                file: file,
+                function: function,
+                line: line
+            )
+            return
+        }
+
+        let monitoring = configuration.resourceMonitoring
+        writeResourceUsage(snapshot, monitoring: monitoring, file: file, function: function, line: line)
+    }
+
+    public static func stopResourceMonitoring() {
+        let monitor = lock.withLock {
+            let monitor = resourceMonitor
+            resourceMonitor = nil
+            return monitor
+        }
+        monitor?.stop()
+    }
+
     @discardableResult
     public static func export(to destinationDirectory: URL? = nil) throws -> URL {
         flush()
@@ -363,6 +399,24 @@ public enum Log {
         scheduleRetentionIfNeeded(configuration: configuration, now: event.date)
     }
 
+    private static func writeResourceUsage(
+        _ snapshot: ResourceUsageSnapshot,
+        monitoring: LogResourceMonitoringConfiguration,
+        file: String,
+        function: String,
+        line: UInt
+    ) {
+        write(
+            level: monitoring.level,
+            message: "Resource Usage",
+            category: monitoring.category,
+            metadata: snapshot.metadata,
+            file: file,
+            function: function,
+            line: line
+        )
+    }
+
     private static func writeSessionHeaderIfNeeded(configuration: LogConfiguration, session: SessionContext) {
         guard configuration.includesSessionHeader, configuration.isFileLoggingEnabled else {
             return
@@ -383,6 +437,31 @@ public enum Log {
         if shouldRun {
             fileWriter.applyRetention(configuration.retention, directory: configuration.logDirectory)
         }
+    }
+
+    private static func startResourceMonitoringIfNeeded(_ monitoring: LogResourceMonitoringConfiguration) {
+        guard monitoring.isEnabled else {
+            return
+        }
+
+        let monitor = ResourceMonitor(configuration: monitoring) { snapshot in
+            recordAutomaticResourceUsage(snapshot, monitoring: monitoring)
+        }
+
+        lock.withLock {
+            resourceMonitor = monitor
+        }
+        monitor.start()
+    }
+
+    private static func recordAutomaticResourceUsage(
+        _ snapshot: ResourceUsageSnapshot,
+        monitoring: LogResourceMonitoringConfiguration,
+        file: String = #fileID,
+        function: String = #function,
+        line: UInt = #line
+    ) {
+        writeResourceUsage(snapshot, monitoring: monitoring, file: file, function: function, line: line)
     }
 
     private static func attachmentDestination(filename: String, configuration: LogConfiguration) throws -> URL {

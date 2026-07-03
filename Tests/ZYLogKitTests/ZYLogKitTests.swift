@@ -13,6 +13,7 @@ final class ZYLogKitTests: XCTestCase {
             logDirectory: directory,
             isConsoleLoggingEnabled: false,
             retention: .disabled,
+            resourceMonitoring: .disabled,
             metadataProvider: { ["TestKey": "TestValue"] }
         ))
 
@@ -56,7 +57,8 @@ final class ZYLogKitTests: XCTestCase {
             subsystem: "tests.zylogkit",
             logDirectory: directory,
             isConsoleLoggingEnabled: false,
-            retention: .disabled
+            retention: .disabled,
+            resourceMonitoring: .disabled
         ))
 
         let attachmentURL = try Log.attach(data: Data("image".utf8), filename: "screenshot.png")
@@ -80,7 +82,8 @@ final class ZYLogKitTests: XCTestCase {
             subsystem: "tests.zylogkit",
             logDirectory: directory,
             isConsoleLoggingEnabled: false,
-            retention: .disabled
+            retention: .disabled,
+            resourceMonitoring: .disabled
         ))
 
         let value = Log.measure("Export PDF") {
@@ -110,6 +113,7 @@ final class ZYLogKitTests: XCTestCase {
             logDirectory: directory,
             isConsoleLoggingEnabled: false,
             retention: .disabled,
+            resourceMonitoring: .disabled,
             metadataProvider: { ["UserID": "42"] }
         ))
 
@@ -141,10 +145,75 @@ final class ZYLogKitTests: XCTestCase {
         XCTAssertTrue(content.contains("UserID=42"))
     }
 
+    func testRecordResourceUsageIncludesCPUAndMemory() throws {
+        let directory = try makeTemporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        Log.configure(LogConfiguration(
+            subsystem: "tests.zylogkit",
+            logDirectory: directory,
+            isConsoleLoggingEnabled: false,
+            retention: .disabled,
+            resourceMonitoring: .disabled
+        ))
+
+        Log.recordResourceUsage(
+            file: "Tests/ResourceSource.swift",
+            function: "sampleResourceUsage()",
+            line: 88
+        )
+        Log.flush()
+
+        let content = try contentsOfFirstLogFile(in: directory)
+        XCTAssertTrue(content.contains("[INFO] [RESOURCE]"))
+        XCTAssertTrue(content.contains("Resource Usage"))
+        XCTAssertTrue(content.contains("resource.cpu.percent="))
+        XCTAssertTrue(content.contains("resource.memory.resident.mb="))
+        XCTAssertTrue(content.contains("resource.memory.resident.bytes="))
+        XCTAssertTrue(content.contains("[source:Tests/ResourceSource.swift:88]"))
+        XCTAssertTrue(content.contains("[function:sampleResourceUsage()]"))
+    }
+
+    func testResourceMonitoringWritesAutomatically() throws {
+        let directory = try makeTemporaryDirectory()
+        defer {
+            Log.stopResourceMonitoring()
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        Log.configure(LogConfiguration(
+            subsystem: "tests.zylogkit",
+            logDirectory: directory,
+            isConsoleLoggingEnabled: false,
+            retention: .disabled,
+            resourceMonitoring: LogResourceMonitoringConfiguration(interval: 0.05)
+        ))
+
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        Log.stopResourceMonitoring()
+        Log.flush()
+
+        let content = try contentsOfFirstLogFile(in: directory)
+        XCTAssertTrue(content.contains("[INFO] [RESOURCE]"))
+        XCTAssertTrue(content.contains("Resource Usage"))
+        XCTAssertTrue(content.contains("resource.cpu.percent="))
+        XCTAssertTrue(content.contains("resource.memory.resident.mb="))
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("ZYLogKitTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+
+    private func contentsOfFirstLogFile(in directory: URL) throws -> String {
+        let logFile = try XCTUnwrap(FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ).first { $0.pathExtension == "log" })
+        return try String(contentsOf: logFile, encoding: .utf8)
     }
 }

@@ -24,5 +24,6 @@ public struct LogCategory: Hashable, ExpressibleByStringLiteral, CustomStringCon
     public static let sync = LogCategory("sync")
     public static let purchase = LogCategory("purchase")
     public static let performance = LogCategory("performance")
+    public static let resource = LogCategory("resource")
     public static let attachment = LogCategory("attachment")
 }
