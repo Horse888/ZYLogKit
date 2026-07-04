@@ -1,60 +1,47 @@
 import Foundation
-
 #if canImport(Darwin)
 import Darwin
 #endif
 
 struct ResourceUsageSnapshot {
-    let cpuUsagePercent: Double
+    let cpuUsageRatio: Double
     let residentMemoryBytes: UInt64
     let physicalFootprintBytes: UInt64?
 
     var metadata: [String: String] {
         var metadata = [
-            "resource.cpu.percent": Self.format(cpuUsagePercent, fractionDigits: 1),
-            "resource.memory.resident.mb": Self.format(Self.megabytes(from: residentMemoryBytes), fractionDigits: 1),
-            "resource.memory.resident.bytes": "\(residentMemoryBytes)"
+            "CPU": cpuUsageRatio.formatted(.percent.precision(.fractionLength(1))),
+            "MEM[Resident]": residentMemoryBytes
+                .formatted(.byteCount(style: .memory))
         ]
 
         if let physicalFootprintBytes {
-            metadata["resource.memory.physical_footprint.mb"] = Self.format(
-                Self.megabytes(from: physicalFootprintBytes),
-                fractionDigits: 1
-            )
-            metadata["resource.memory.physical_footprint.bytes"] = "\(physicalFootprintBytes)"
+            metadata["MEM[Physical]"] = physicalFootprintBytes.formatted(.byteCount(style: .memory))
         }
 
         return metadata
     }
 
     static func current() -> ResourceUsageSnapshot? {
-        #if canImport(Darwin)
+#if canImport(Darwin)
         guard let memory = currentMemoryUsage() else {
             return nil
         }
 
         return ResourceUsageSnapshot(
-            cpuUsagePercent: currentCPUUsagePercent(),
+            cpuUsageRatio: currentCPUUsageRatio(),
             residentMemoryBytes: memory.resident,
             physicalFootprintBytes: memory.physicalFootprint
         )
-        #else
+#else
         return nil
-        #endif
-    }
-
-    private static func megabytes(from bytes: UInt64) -> Double {
-        Double(bytes) / 1_048_576
-    }
-
-    private static func format(_ value: Double, fractionDigits: Int) -> String {
-        String(format: "%.\(fractionDigits)f", value)
+#endif
     }
 }
 
 #if canImport(Darwin)
 private extension ResourceUsageSnapshot {
-    static func currentCPUUsagePercent() -> Double {
+    static func currentCPUUsageRatio() -> Double {
         var threadList: thread_act_array_t?
         var threadCount = mach_msg_type_number_t(0)
 
@@ -86,7 +73,7 @@ private extension ResourceUsageSnapshot {
             }
 
             if infoResult == KERN_SUCCESS, threadInfo.flags & TH_FLAGS_IDLE == 0 {
-                totalUsage += Double(threadInfo.cpu_usage) / Double(TH_USAGE_SCALE) * 100
+                totalUsage += Double(threadInfo.cpu_usage) / Double(TH_USAGE_SCALE)
             }
         }
 
