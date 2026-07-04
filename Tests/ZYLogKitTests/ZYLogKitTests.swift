@@ -32,15 +32,15 @@ final class ZYLogKitTests: XCTestCase {
 
         let content = try String(contentsOf: logFiles[0], encoding: .utf8)
         XCTAssertTrue(content.contains("===== Session Begin ====="))
-        XCTAssertTrue(content.contains("[INFO] [UI]"))
+        XCTAssertTrue(content.contains("INFO UI"))
         XCTAssertTrue(content.contains("App Launch"))
-        XCTAssertTrue(content.contains("[INFO] [NETWORK]"))
+        XCTAssertTrue(content.contains("INFO NETWORK"))
         XCTAssertTrue(content.contains("GET /user"))
-        XCTAssertTrue(content.contains("[INFO] [DATABASE]"))
+        XCTAssertTrue(content.contains("INFO DATABASE"))
         XCTAssertTrue(content.contains("Insert Word"))
         XCTAssertTrue(content.contains("TestKey: TestValue"))
         XCTAssertTrue(content.contains("TestKey=TestValue"))
-        XCTAssertTrue(content.contains("ℹ️ [INFO] [UI]"))
+        XCTAssertTrue(content.contains("ℹ️ INFO UI"))
 
         let zipURL = try Log.export(to: directory)
         let zipData = try Data(contentsOf: zipURL)
@@ -99,11 +99,11 @@ final class ZYLogKitTests: XCTestCase {
             includingPropertiesForKeys: nil
         ).first { $0.pathExtension == "log" })
         let content = try String(contentsOf: logFile, encoding: .utf8)
-        XCTAssertTrue(content.contains("[PERFORMANCE]"))
+        XCTAssertTrue(content.contains("PERFORMANCE"))
         XCTAssertTrue(content.contains("Export PDF"))
     }
 
-    func testLogLineStartsWithSourceContextAndOmitsSession() throws {
+    func testLogLineUsesCompactReadableContext() throws {
         let directory = try makeTemporaryDirectory()
         defer {
             try? FileManager.default.removeItem(at: directory)
@@ -115,7 +115,16 @@ final class ZYLogKitTests: XCTestCase {
             isConsoleLoggingEnabled: false,
             retention: .disabled,
             resourceMonitoring: .disabled,
-            metadataProvider: { ["UserID": "42"] }
+            metadataProvider: {
+                [
+                    "UserID": "42",
+                    "app.name": "出入口制图",
+                    "app.version": "5.1.2",
+                    "app.build": "260630",
+                    "device.model": "iPad",
+                    "system.version": "27.0"
+                ]
+            }
         ))
 
         Log.warning(
@@ -138,15 +147,21 @@ final class ZYLogKitTests: XCTestCase {
             .map(String.init)
             .first { $0.contains("Context Check") })
 
-        XCTAssertTrue(line.hasPrefix("[file:ManualSource.swift:123] [function:sampleFunction()]"))
-        XCTAssertTrue(line.contains("⚠️ [WARNING] [SYNC]"))
+        XCTAssertTrue(line.contains("⚠️ WARNING SYNC ManualSource.swift:123 sampleFunction() - Context Check"))
         XCTAssertTrue(line.contains("Context Check"))
         XCTAssertFalse(line.contains("[session:"))
-        XCTAssertTrue(line.contains("[process:"))
-        XCTAssertTrue(line.contains("pid:\(ProcessInfo.processInfo.processIdentifier)"))
-        XCTAssertTrue(line.contains("[thread:"))
+        XCTAssertFalse(line.contains("[process:"))
+        XCTAssertFalse(line.contains("pid:"))
+        XCTAssertFalse(line.contains("[thread:"))
         XCTAssertTrue(line.contains("RequestID=abc"))
         XCTAssertTrue(line.contains("UserID=42"))
+        XCTAssertTrue(line.contains("app=出入口制图 5.1.2(260630)"))
+        XCTAssertTrue(line.contains("device=iPad OS 27.0"))
+        XCTAssertFalse(line.contains("app.build="))
+        XCTAssertFalse(line.contains("app.name="))
+        XCTAssertFalse(line.contains("app.version="))
+        XCTAssertFalse(line.contains("device.model="))
+        XCTAssertFalse(line.contains("system.version="))
     }
 
     func testErrorLogUsesRedExclamationEmoji() throws {
@@ -178,9 +193,9 @@ final class ZYLogKitTests: XCTestCase {
             .map(String.init)
             .first { $0.contains("Failure") })
 
-        XCTAssertTrue(line.hasPrefix("[file:ErrorSource.swift:44] [function:failingFunction()]"))
-        XCTAssertTrue(line.contains("❗ [ERROR] [DATABASE]"))
+        XCTAssertTrue(line.contains("❗ ERROR DATABASE ErrorSource.swift:44 failingFunction() - Failure"))
         XCTAssertFalse(line.contains("[session:"))
+        XCTAssertFalse(line.contains("[process:"))
     }
 
     func testFormattedDateUsesLocalTimeZone() {
@@ -216,13 +231,13 @@ final class ZYLogKitTests: XCTestCase {
         Log.flush()
 
         let content = try contentsOfFirstLogFile(in: directory)
-        XCTAssertTrue(content.contains("[INFO] [RESOURCE]"))
+        XCTAssertTrue(content.contains("INFO RESOURCE"))
         XCTAssertTrue(content.contains("Resource Usage"))
         XCTAssertTrue(content.contains("resource.cpu.percent="))
         XCTAssertTrue(content.contains("resource.memory.resident.mb="))
         XCTAssertTrue(content.contains("resource.memory.resident.bytes="))
-        XCTAssertTrue(content.contains("[file:ResourceSource.swift:88]"))
-        XCTAssertTrue(content.contains("[function:sampleResourceUsage()]"))
+        XCTAssertTrue(content.contains("ResourceSource.swift:88"))
+        XCTAssertTrue(content.contains("sampleResourceUsage()"))
     }
 
     func testResourceMonitoringWritesAutomatically() throws {
@@ -245,7 +260,7 @@ final class ZYLogKitTests: XCTestCase {
         Log.flush()
 
         let content = try contentsOfFirstLogFile(in: directory)
-        XCTAssertTrue(content.contains("ℹ️ [INFO] [RESOURCE]"))
+        XCTAssertTrue(content.contains("ℹ️ INFO RESOURCE"))
         XCTAssertTrue(content.contains("Resource Usage"))
         XCTAssertTrue(content.contains("resource.cpu.percent="))
         XCTAssertTrue(content.contains("resource.memory.resident.mb="))

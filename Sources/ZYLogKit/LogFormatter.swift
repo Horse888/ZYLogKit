@@ -10,28 +10,23 @@ public struct LogFormatter {
     }
 
     func format(_ event: LogEvent) -> String {
-        var components: [String] = []
-
-        if includesSourceLocation {
-            components.append("[file:\(Self.fileName(from: event.file)):\(event.line)]")
-            components.append("[function:\(event.function)]")
-        }
-
-        components.append(contentsOf: [
+        var components = [
             Self.formattedDate(event.date),
             event.level.emoji,
-            "[\(event.level.label)]",
-            "[\(event.category.description)]",
-            "[process:\(event.processName) pid:\(event.processID)]",
-            "[thread:\(event.thread)]",
-            event.message
-        ])
+            event.level.label,
+            event.category.description
+        ]
+
+        if includesSourceLocation {
+            components.append("\(Self.fileName(from: event.file)):\(event.line)")
+            components.append(event.function)
+        }
+
+        components.append("-")
+        components.append(event.message)
 
         if includesMetadata, !event.metadata.isEmpty {
-            let metadata = event.metadata
-                .sorted { $0.key < $1.key }
-                .map { "\($0.key)=\($0.value)" }
-                .joined(separator: " ")
+            let metadata = Self.formattedMetadata(event.metadata)
             components.append("{\(metadata)}")
         }
 
@@ -51,6 +46,63 @@ public struct LogFormatter {
             .split(separator: "/")
             .last
             .map(String.init) ?? file
+    }
+
+    private static func formattedMetadata(_ metadata: [String: String]) -> String {
+        var remainingMetadata = metadata
+        var items: [String] = []
+
+        if let app = formattedAppMetadata(from: &remainingMetadata) {
+            items.append(app)
+        }
+
+        if let device = formattedDeviceMetadata(from: &remainingMetadata) {
+            items.append(device)
+        }
+
+        items.append(contentsOf: remainingMetadata
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" })
+
+        return items.joined(separator: " ")
+    }
+
+    private static func formattedAppMetadata(from metadata: inout [String: String]) -> String? {
+        let name = metadata.removeValue(forKey: "app.name")
+        let version = metadata.removeValue(forKey: "app.version")
+        let build = metadata.removeValue(forKey: "app.build")
+
+        guard name != nil || version != nil || build != nil else {
+            return nil
+        }
+
+        var value = name ?? "unknown"
+        if let version {
+            value += " \(version)"
+        }
+        if let build {
+            value += "(\(build))"
+        }
+
+        return "app=\(value)"
+    }
+
+    private static func formattedDeviceMetadata(from metadata: inout [String: String]) -> String? {
+        let model = metadata.removeValue(forKey: "device.model")
+        let systemVersion = metadata.removeValue(forKey: "system.version")
+
+        guard model != nil || systemVersion != nil else {
+            return nil
+        }
+
+        let value = [
+            model,
+            systemVersion.map { "OS \($0)" }
+        ]
+        .compactMap { $0 }
+        .joined(separator: " ")
+
+        return "device=\(value)"
     }
 
     private static let dateFormatterLock = NSLock()
