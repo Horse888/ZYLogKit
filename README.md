@@ -5,7 +5,7 @@
 ## Install
 
 ```swift
-.package(url: "https://github.com/zzymoon/ZYLogKit.git", from: "1.0.0")
+.package(url: "https://github.com/Horse888/ZYLogKit.git", from: "1.0.2")
 ```
 
 ```swift
