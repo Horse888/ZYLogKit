@@ -36,7 +36,11 @@ private enum ZipWriter {
         fileManager.createFile(atPath: destinationURL.path, contents: nil)
         let handle = try FileHandle(forWritingTo: destinationURL)
         defer {
-            handle.closeFile()
+            if #available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, *) {
+                try? handle.close()
+            } else {
+                handle.closeFile()
+            }
         }
 
         let files = try allFiles(in: directory)

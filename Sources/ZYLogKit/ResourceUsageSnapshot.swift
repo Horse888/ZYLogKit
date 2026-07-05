@@ -47,7 +47,15 @@ struct ResourceUsageSnapshot {
     }
 
     private static func format(_ value: Double, fractionDigits: Int) -> String {
-        String(format: "%.\(fractionDigits)f", locale: Locale(identifier: "en_US_POSIX"), value)
+        if #available(iOS 15.0, macOS 12.0, tvOS 15.0, watchOS 8.0, *) {
+            return value.formatted(
+                .number
+                    .precision(.fractionLength(fractionDigits))
+                    .locale(Locale(identifier: "en_US_POSIX"))
+            )
+        }
+
+        return String(format: "%.\(fractionDigits)f", locale: Locale(identifier: "en_US_POSIX"), value)
     }
 }
 
