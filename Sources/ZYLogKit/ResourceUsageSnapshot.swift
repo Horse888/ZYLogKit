@@ -10,13 +10,17 @@ struct ResourceUsageSnapshot {
 
     var metadata: [String: String] {
         var metadata = [
-            "CPU": cpuUsageRatio.formatted(.percent.precision(.fractionLength(1))),
-            "MEM[Resident]": residentMemoryBytes
-                .formatted(.byteCount(style: .memory))
+            "resource.cpu.percent": Self.format(cpuUsageRatio * 100, fractionDigits: 1),
+            "resource.memory.resident.mb": Self.format(Self.megabytes(from: residentMemoryBytes), fractionDigits: 1),
+            "resource.memory.resident.bytes": "\(residentMemoryBytes)"
         ]
 
         if let physicalFootprintBytes {
-            metadata["MEM[Physical]"] = physicalFootprintBytes.formatted(.byteCount(style: .memory))
+            metadata["resource.memory.physical_footprint.mb"] = Self.format(
+                Self.megabytes(from: physicalFootprintBytes),
+                fractionDigits: 1
+            )
+            metadata["resource.memory.physical_footprint.bytes"] = "\(physicalFootprintBytes)"
         }
 
         return metadata
@@ -36,6 +40,14 @@ struct ResourceUsageSnapshot {
 #else
         return nil
 #endif
+    }
+
+    private static func megabytes(from bytes: UInt64) -> Double {
+        Double(bytes) / 1_048_576
+    }
+
+    private static func format(_ value: Double, fractionDigits: Int) -> String {
+        String(format: "%.\(fractionDigits)f", locale: Locale(identifier: "en_US_POSIX"), value)
     }
 }
 

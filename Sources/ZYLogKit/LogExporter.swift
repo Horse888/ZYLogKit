@@ -36,7 +36,7 @@ private enum ZipWriter {
         fileManager.createFile(atPath: destinationURL.path, contents: nil)
         let handle = try FileHandle(forWritingTo: destinationURL)
         defer {
-            try? handle.close()
+            handle.closeFile()
         }
 
         let files = try allFiles(in: directory)
