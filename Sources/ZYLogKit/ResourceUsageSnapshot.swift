@@ -11,16 +11,14 @@ struct ResourceUsageSnapshot {
     var metadata: [String: String] {
         var metadata = [
             "resource.cpu.percent": Self.format(cpuUsageRatio * 100, fractionDigits: 1),
-            "resource.memory.resident.mb": Self.format(Self.megabytes(from: residentMemoryBytes), fractionDigits: 1),
-            "resource.memory.resident.bytes": "\(residentMemoryBytes)"
+            "resource.memory.resident.mb": Self.formatMemoryMegabytes(from: residentMemoryBytes, fractionDigits: 1)
         ]
 
         if let physicalFootprintBytes {
-            metadata["resource.memory.physical_footprint.mb"] = Self.format(
-                Self.megabytes(from: physicalFootprintBytes),
+            metadata["resource.memory.physical_footprint.mb"] = Self.formatMemoryMegabytes(
+                from: physicalFootprintBytes,
                 fractionDigits: 1
             )
-            metadata["resource.memory.physical_footprint.bytes"] = "\(physicalFootprintBytes)"
         }
 
         return metadata
@@ -44,6 +42,20 @@ struct ResourceUsageSnapshot {
 
     private static func megabytes(from bytes: UInt64) -> Double {
         Double(bytes) / 1_048_576
+    }
+
+    private static func formatMemoryMegabytes(from bytes: UInt64, fractionDigits: Int) -> String {
+        if #available(iOS 15.0, macOS 12.0, tvOS 15.0, watchOS 8.0, *) {
+            let megabytes = Measurement(value: Double(bytes), unit: UnitInformationStorage.bytes)
+                .converted(to: .megabytes)
+            return megabytes.value.formatted(
+                .number
+                    .precision(.fractionLength(fractionDigits))
+                    .locale(Locale(identifier: "en_US_POSIX"))
+            )
+        }
+
+        return format(megabytes(from: bytes), fractionDigits: fractionDigits)
     }
 
     private static func format(_ value: Double, fractionDigits: Int) -> String {
