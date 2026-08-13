@@ -5,6 +5,7 @@ public enum Log {
     private static let fileWriter = FileWriter()
     private static let formatter = LogFormatter()
     private static var currentConfiguration = LogConfiguration.default
+    private static var currentSanitizer = LogSanitizer(configuration: currentConfiguration)
     private static var currentSession = SessionContext.make(configuration: currentConfiguration)
     private static var timers: [String: Date] = [:]
     private static var lastRetentionCheck: Date?
@@ -23,12 +24,14 @@ public enum Log {
     }
 
     public static func configure(_ configuration: LogConfiguration) {
+        let sanitizer = LogSanitizer(configuration: configuration)
         let session = SessionContext.make(configuration: configuration)
 
         let previousMonitor = lock.withLock {
             let monitor = resourceMonitor
             resourceMonitor = nil
             currentConfiguration = configuration
+            currentSanitizer = sanitizer
             currentSession = session
             timers.removeAll()
             lastRetentionCheck = nil
@@ -37,13 +40,17 @@ public enum Log {
 
         previousMonitor?.stop()
         fileWriter.close()
-        writeSessionHeaderIfNeeded(configuration: configuration, session: session)
+        writeSessionHeaderIfNeeded(configuration: configuration, session: session, sanitizer: sanitizer)
         scheduleRetentionIfNeeded(configuration: configuration, now: Date())
         startResourceMonitoringIfNeeded(configuration.resourceMonitoring)
     }
 
     public static func startNewSession() {
-        let configuration = self.configuration
+        let snapshot = lock.withLock {
+            (currentConfiguration, currentSanitizer)
+        }
+        let configuration = snapshot.0
+        let sanitizer = snapshot.1
         let session = SessionContext.make(configuration: configuration)
 
         lock.withLock {
@@ -51,7 +58,7 @@ public enum Log {
             timers.removeAll()
         }
 
-        writeSessionHeaderIfNeeded(configuration: configuration, session: session)
+        writeSessionHeaderIfNeeded(configuration: configuration, session: session, sanitizer: sanitizer)
     }
 
     public static func trace(
@@ -357,11 +364,11 @@ public enum Log {
         #endif
 
         let snapshot = lock.withLock {
-            (currentConfiguration, currentSession)
+            (currentConfiguration, currentSanitizer)
         }
 
         let configuration = snapshot.0
-        let session = snapshot.1
+        let sanitizer = snapshot.1
 
         guard level >= configuration.minimumLevel else {
             return
@@ -372,22 +379,17 @@ public enum Log {
             eventMetadata[key] = value
         }
 
-        let processInfo = ProcessInfo.processInfo
         let event = LogEvent(
             date: Date(),
             level: level,
             category: category,
-            message: message,
+            message: sanitizer.message(message),
             file: file,
             function: function,
             line: line,
-            sessionID: session.id,
-            processName: processInfo.processName,
-            processID: processInfo.processIdentifier,
-            thread: currentThreadDescription(),
-            metadata: eventMetadata
+            metadata: sanitizer.metadata(eventMetadata)
         )
-        let formattedLine = formatter.format(event)
+        let formattedLine = sanitizer.formattedLine(formatter.format(event))
 
         if configuration.isConsoleLoggingEnabled, level >= configuration.consoleMinimumLevel {
             OSLogBridge.write(formattedLine, event: event, configuration: configuration)
@@ -418,12 +420,16 @@ public enum Log {
         )
     }
 
-    private static func writeSessionHeaderIfNeeded(configuration: LogConfiguration, session: SessionContext) {
+    private static func writeSessionHeaderIfNeeded(
+        configuration: LogConfiguration,
+        session: SessionContext,
+        sanitizer: LogSanitizer
+    ) {
         guard configuration.includesSessionHeader, configuration.isFileLoggingEnabled else {
             return
         }
 
-        fileWriter.write(lines: session.headerLines(), date: session.startedAt, configuration: configuration)
+        fileWriter.write(lines: session.headerLines(sanitizer: sanitizer), date: session.startedAt, configuration: configuration)
     }
 
     private static func scheduleRetentionIfNeeded(configuration: LogConfiguration, now: Date) {
@@ -496,18 +502,6 @@ public enum Log {
             .joined(separator: "-")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return cleaned.isEmpty ? "attachment-\(UUID().uuidString)" : cleaned
-    }
-
-    private static func currentThreadDescription() -> String {
-        if Thread.isMainThread {
-            return "main"
-        }
-
-        if let name = Thread.current.name, !name.isEmpty {
-            return name
-        }
-
-        return "background"
     }
 
     private static func formatElapsedTime(from startedAt: Date, to endedAt: Date) -> String {

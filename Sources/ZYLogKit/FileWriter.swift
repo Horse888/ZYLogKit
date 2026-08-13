@@ -57,7 +57,10 @@ final class FileWriter {
                 )
 
                 if !FileManager.default.fileExists(atPath: fileURL.path) {
-                    FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+                    let created = FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+                    if !created {
+                        throw FileWriterError.createFileFailed(fileURL)
+                    }
                 }
 
                 fileHandle = try FileHandle(forWritingTo: fileURL)
@@ -73,6 +76,7 @@ final class FileWriter {
         } catch {
             currentFileURL = nil
             closeLocked()
+            configuration.internalErrorHandler("ZYLogKit failed to write a log line.", error)
         }
     }
 
@@ -88,4 +92,8 @@ final class FileWriter {
         fileHandle = nil
         currentFileURL = nil
     }
+}
+
+private enum FileWriterError: Error {
+    case createFileFailed(URL)
 }

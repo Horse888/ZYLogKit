@@ -18,14 +18,14 @@ struct SessionContext {
         )
     }
 
-    func headerLines() -> [String] {
+    func headerLines(sanitizer: LogSanitizer) -> [String] {
         var lines = [
             "===== Session Begin =====",
             "Session: \(id)",
             "StartedAt: \(LogFormatter.formattedDate(startedAt))"
         ]
 
-        for item in metadata.sorted(by: { $0.key < $1.key }) {
+        for item in sanitizer.metadata(metadata).sorted(by: { $0.key < $1.key }) {
             lines.append("\(item.key): \(item.value)")
         }
 

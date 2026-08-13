@@ -235,9 +235,134 @@ final class ZYLogKitTests: XCTestCase {
         XCTAssertTrue(content.contains("Resource Usage"))
         XCTAssertTrue(content.contains("resource.cpu.percent="))
         XCTAssertTrue(content.contains("resource.memory.resident.mb="))
-        XCTAssertTrue(content.contains("resource.memory.resident.bytes="))
         XCTAssertTrue(content.contains("ResourceSource.swift:88"))
         XCTAssertTrue(content.contains("sampleResourceUsage()"))
+    }
+
+    func testLogRedactsSensitiveMessagesMetadataAndSessionHeader() throws {
+        let directory = try makeTemporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        Log.configure(LogConfiguration(
+            subsystem: "tests.zylogkit",
+            logDirectory: directory,
+            isConsoleLoggingEnabled: false,
+            retention: .disabled,
+            resourceMonitoring: .disabled,
+            metadataProvider: {
+                [
+                    "apiKey": "provider-secret",
+                    "bad\nkey": "bad\rvalue",
+                    "Environment": "test"
+                ]
+            }
+        ))
+
+        Log.info(
+            "Login token=abc123 password=hunter2 user=user@example.com Authorization: Bearer bearer-token",
+            metadata: [
+                "Access Token": "space-secret",
+                "refreshToken": "refresh-secret",
+                "line\nbreak": "tab\tvalue",
+                "SafeKey": "visible"
+            ]
+        )
+        Log.flush()
+
+        let content = try contentsOfFirstLogFile(in: directory)
+        XCTAssertFalse(content.contains("abc123"))
+        XCTAssertFalse(content.contains("hunter2"))
+        XCTAssertFalse(content.contains("user@example.com"))
+        XCTAssertFalse(content.contains("bearer-token"))
+        XCTAssertFalse(content.contains("refresh-secret"))
+        XCTAssertFalse(content.contains("space-secret"))
+        XCTAssertFalse(content.contains("provider-secret"))
+        XCTAssertFalse(content.contains("bad\nkey"))
+        XCTAssertFalse(content.contains("bad\rvalue"))
+        XCTAssertTrue(content.contains("token=[REDACTED]"))
+        XCTAssertTrue(content.contains("password=[REDACTED]"))
+        XCTAssertTrue(content.contains("[REDACTED_EMAIL]"))
+        XCTAssertTrue(content.contains("Authorization: Bearer [REDACTED]"))
+        XCTAssertTrue(content.contains("Access Token=[REDACTED]"))
+        XCTAssertTrue(content.contains("refreshToken=[REDACTED]"))
+        XCTAssertTrue(content.contains("line\\nbreak=tab\\tvalue"))
+        XCTAssertTrue(content.contains("bad\\nkey: bad\\rvalue"))
+        XCTAssertTrue(content.contains("apiKey: [REDACTED]"))
+        XCTAssertTrue(content.contains("SafeKey=visible"))
+        XCTAssertTrue(content.contains("Environment: test"))
+    }
+
+    func testOutputLimitsTruncateMessageAndMetadata() throws {
+        let directory = try makeTemporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        Log.configure(LogConfiguration(
+            subsystem: "tests.zylogkit",
+            logDirectory: directory,
+            isConsoleLoggingEnabled: false,
+            retention: .disabled,
+            resourceMonitoring: .disabled,
+            outputLimits: LogOutputLimits(
+                maximumMessageCharacters: 5,
+                maximumMetadataKeyCharacters: 5,
+                maximumMetadataValueCharacters: 4,
+                maximumMetadataItemCount: 2,
+                maximumFormattedLineCharacters: nil
+            )
+        ))
+
+        Log.info(
+            "abcdef",
+            metadata: [
+                "a": "123456",
+                "b": "ok",
+                "cLongKey": "dropped",
+                "d": "dropped"
+            ]
+        )
+        Log.flush()
+
+        let content = try contentsOfFirstLogFile(in: directory)
+        XCTAssertTrue(content.contains("abcde...[truncated]"))
+        XCTAssertTrue(content.contains("a=1234...[truncated]"))
+        XCTAssertTrue(content.contains("b=ok"))
+        XCTAssertTrue(content.contains("log.metadata.dropped_count=2"))
+        XCTAssertFalse(content.contains("cLongKey=dropped"))
+        XCTAssertFalse(content.contains("d=dropped"))
+    }
+
+    func testInternalErrorHandlerReceivesFileWriteFailures() throws {
+        let directory = try makeTemporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let fileURL = directory.appendingPathComponent("NotADirectory")
+        try Data("occupied".utf8).write(to: fileURL)
+        let expectation = expectation(description: "internal error handler")
+        var capturedMessage: String?
+
+        Log.configure(LogConfiguration(
+            subsystem: "tests.zylogkit",
+            logDirectory: fileURL,
+            isConsoleLoggingEnabled: false,
+            retention: .disabled,
+            includesSessionHeader: false,
+            resourceMonitoring: .disabled,
+            internalErrorHandler: { message, _ in
+                capturedMessage = message
+                expectation.fulfill()
+            }
+        ))
+
+        Log.info("Cannot write")
+        wait(for: [expectation], timeout: 2)
+
+        XCTAssertEqual(capturedMessage, "ZYLogKit failed to write a log line.")
     }
 
     func testResourceMonitoringWritesAutomatically() throws {

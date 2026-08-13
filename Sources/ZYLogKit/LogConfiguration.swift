@@ -11,6 +11,9 @@ public struct LogConfiguration {
     public var retention: LogRetention
     public var includesSessionHeader: Bool
     public var resourceMonitoring: LogResourceMonitoringConfiguration
+    public var privacy: LogPrivacyConfiguration
+    public var outputLimits: LogOutputLimits
+    public var internalErrorHandler: (String, Error?) -> Void
     public var metadataProvider: () -> [String: String]
 
     public init(
@@ -24,6 +27,9 @@ public struct LogConfiguration {
         retention: LogRetention = .default,
         includesSessionHeader: Bool = true,
         resourceMonitoring: LogResourceMonitoringConfiguration = .default,
+        privacy: LogPrivacyConfiguration = .default,
+        outputLimits: LogOutputLimits = .default,
+        internalErrorHandler: @escaping (String, Error?) -> Void = { _, _ in },
         metadataProvider: @escaping () -> [String: String] = { [:] }
     ) {
         self.subsystem = subsystem
@@ -36,6 +42,9 @@ public struct LogConfiguration {
         self.retention = retention
         self.includesSessionHeader = includesSessionHeader
         self.resourceMonitoring = resourceMonitoring
+        self.privacy = privacy
+        self.outputLimits = outputLimits
+        self.internalErrorHandler = internalErrorHandler
         self.metadataProvider = metadataProvider
     }
 

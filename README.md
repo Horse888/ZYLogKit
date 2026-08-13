@@ -5,7 +5,7 @@
 ## Install
 
 ```swift
-.package(url: "https://github.com/Horse888/ZYLogKit.git", from: "1.0.2")
+.package(url: "https://github.com/Horse888/ZYLogKit.git", from: "1.0.3")
 ```
 
 ```swift
@@ -35,6 +35,17 @@ Log.configure(LogConfiguration(
         maximumTotalSizeBytes: 20 * 1024 * 1024,
         maximumFileCount: 30
     ),
+    privacy: .default,
+    outputLimits: LogOutputLimits(
+        maximumMessageCharacters: 8 * 1024,
+        maximumMetadataKeyCharacters: 256,
+        maximumMetadataValueCharacters: 2 * 1024,
+        maximumMetadataItemCount: 64,
+        maximumFormattedLineCharacters: 16 * 1024
+    ),
+    internalErrorHandler: { message, error in
+        print("[ZYLogKit] \(message)", error ?? "")
+    },
     metadataProvider: {
         [
             "UserID": currentUserID,
@@ -51,6 +62,21 @@ Application Support/<bundle id>/Logs/yyyy-MM-dd.log
 ```
 
 Each configured session starts with metadata such as session ID, OS, process name, bundle, version, and build.
+
+## Safety And Reliability
+
+ZYLogKit applies privacy protection by default. Common secrets in messages and metadata, such as tokens, passwords, authorization headers, API keys, cookies, credentials, and email addresses, are redacted before they reach console or file output.
+
+```swift
+Log.info(
+    "Login token=abc123 user=user@example.com",
+    metadata: ["apiKey": "secret", "RequestID": "visible"]
+)
+```
+
+Output is bounded by default so a single oversized message, metadata key, or metadata value cannot grow log files unexpectedly. Configure `outputLimits` to tune or disable those caps. Metadata keys and values are normalized so control characters cannot split one event into multiple physical lines.
+
+File-write failures are reported through `internalErrorHandler` instead of being silently ignored.
 
 ## Resource Monitoring
 

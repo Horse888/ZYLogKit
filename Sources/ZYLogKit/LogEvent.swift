@@ -8,9 +8,5 @@ struct LogEvent {
     let file: String
     let function: String
     let line: UInt
-    let sessionID: String
-    let processName: String
-    let processID: Int32
-    let thread: String
     let metadata: [String: String]
 }
