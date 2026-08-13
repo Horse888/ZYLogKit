@@ -1,6 +1,6 @@
 import Foundation
 
-public struct LogOutputLimits {
+public struct LogOutputLimits: Sendable {
     public var maximumMessageCharacters: Int?
     public var maximumMetadataKeyCharacters: Int?
     public var maximumMetadataValueCharacters: Int?

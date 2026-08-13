@@ -4,6 +4,7 @@ final class ResourceMonitor {
     private let configuration: LogResourceMonitoringConfiguration
     private let handler: (ResourceUsageSnapshot) -> Void
     private let queue = DispatchQueue(label: "com.zylogkit.resource-monitor")
+    private let queueKey = DispatchSpecificKey<UInt8>()
     private var timer: DispatchSourceTimer?
 
     init(
@@ -12,27 +13,40 @@ final class ResourceMonitor {
     ) {
         self.configuration = configuration
         self.handler = handler
+        queue.setSpecific(key: queueKey, value: 1)
     }
 
     func start() {
-        guard configuration.isEnabled, configuration.interval > 0 else {
+        guard configuration.isEnabled,
+              configuration.interval.isFinite,
+              configuration.interval > 0 else {
             return
         }
 
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + configuration.interval, repeating: configuration.interval)
-        timer.setEventHandler { [handler] in
-            guard let snapshot = ResourceUsageSnapshot.current() else {
+        performSynchronously {
+            guard timer == nil else {
                 return
             }
-            handler(snapshot)
+
+            let interval = min(
+                max(configuration.interval, Self.minimumInterval),
+                Self.maximumInterval
+            )
+            let timer = DispatchSource.makeTimerSource(queue: queue)
+            timer.schedule(deadline: .now() + interval, repeating: interval)
+            timer.setEventHandler { [handler] in
+                guard let snapshot = ResourceUsageSnapshot.current() else {
+                    return
+                }
+                handler(snapshot)
+            }
+            self.timer = timer
+            timer.resume()
         }
-        self.timer = timer
-        timer.resume()
     }
 
     func stop() {
-        queue.sync {
+        performSynchronously {
             timer?.setEventHandler {}
             timer?.cancel()
             timer = nil
@@ -42,4 +56,15 @@ final class ResourceMonitor {
     deinit {
         stop()
     }
+
+    private func performSynchronously(_ work: () -> Void) {
+        if DispatchQueue.getSpecific(key: queueKey) != nil {
+            work()
+        } else {
+            queue.sync(execute: work)
+        }
+    }
+
+    private static let minimumInterval: TimeInterval = 0.1
+    private static let maximumInterval: TimeInterval = 365 * 24 * 60 * 60
 }

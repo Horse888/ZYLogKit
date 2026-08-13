@@ -1,6 +1,6 @@
 import Foundation
 
-public struct LogResourceMonitoringConfiguration {
+public struct LogResourceMonitoringConfiguration: Sendable {
     public var isEnabled: Bool
     public var interval: TimeInterval
     public var level: LogLevel

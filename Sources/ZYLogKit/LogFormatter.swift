@@ -1,6 +1,6 @@
 import Foundation
 
-public struct LogFormatter {
+public struct LogFormatter: Sendable {
     public var includesSourceLocation: Bool
     public var includesMetadata: Bool
 

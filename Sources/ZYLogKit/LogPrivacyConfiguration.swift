@@ -1,6 +1,6 @@
 import Foundation
 
-public struct LogRedactionRule {
+public struct LogRedactionRule: Sendable {
     public var pattern: String
     public var replacement: String
 
@@ -10,7 +10,7 @@ public struct LogRedactionRule {
     }
 }
 
-public struct LogPrivacyConfiguration {
+public struct LogPrivacyConfiguration: Sendable {
     public var isEnabled: Bool
     public var redactedValue: String
     public var sensitiveMetadataKeys: Set<String>

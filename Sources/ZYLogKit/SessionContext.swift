@@ -6,9 +6,12 @@ struct SessionContext {
     let metadata: [String: String]
 
     static func make(configuration: LogConfiguration) -> SessionContext {
-        var metadata = defaultMetadata()
-        configuration.metadataProvider().forEach { key, value in
-            metadata[key] = value
+        var metadata: [String: String] = [:]
+        if configuration.includesSessionHeader, configuration.isFileLoggingEnabled {
+            metadata = defaultMetadata()
+            MetadataProviderEvaluator.evaluate(configuration.metadataProvider).forEach { key, value in
+                metadata[key] = value
+            }
         }
 
         return SessionContext(
@@ -37,8 +40,7 @@ struct SessionContext {
         let processInfo = ProcessInfo.processInfo
         var metadata: [String: String] = [
             "Process": processInfo.processName,
-            "OS": processInfo.operatingSystemVersionString,
-            "Host": processInfo.hostName
+            "OS": processInfo.operatingSystemVersionString
         ]
 
         if let bundleIdentifier = Bundle.main.bundleIdentifier {

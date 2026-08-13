@@ -48,16 +48,18 @@ public struct LogRetention: Sendable {
             return LogFileInfo(
                 url: url,
                 modifiedAt: values?.contentModificationDate ?? .distantPast,
-                size: UInt64(values?.fileSize ?? 0)
+                size: UInt64(max(0, values?.fileSize ?? 0))
             )
         }
 
-        if let maximumAge {
-            let earliestAllowedDate = now.addingTimeInterval(-maximumAge)
-            for file in files where file.modifiedAt < earliestAllowedDate {
-                try? fileManager.removeItem(at: file.url)
+        if let maximumAge, maximumAge.isFinite {
+            let earliestAllowedDate = now.addingTimeInterval(-max(0, maximumAge))
+            files.removeAll { file in
+                guard file.modifiedAt < earliestAllowedDate else {
+                    return false
+                }
+                return remove(file, fileManager: fileManager)
             }
-            files.removeAll { $0.modifiedAt < earliestAllowedDate }
         }
 
         files.sort { lhs, rhs in
@@ -65,20 +67,39 @@ public struct LogRetention: Sendable {
         }
 
         if let maximumFileCount, maximumFileCount >= 0, files.count > maximumFileCount {
-            let removeCount = files.count - maximumFileCount
-            for file in files.prefix(removeCount) {
-                try? fileManager.removeItem(at: file.url)
+            var removeCount = files.count - maximumFileCount
+            files.removeAll { file in
+                guard removeCount > 0, remove(file, fileManager: fileManager) else {
+                    return false
+                }
+                removeCount -= 1
+                return true
             }
-            files.removeFirst(removeCount)
         }
 
         if let maximumTotalSizeBytes {
-            var totalSize = files.reduce(UInt64(0)) { $0 + $1.size }
-            while totalSize > maximumTotalSizeBytes, let file = files.first {
-                try? fileManager.removeItem(at: file.url)
-                totalSize = totalSize > file.size ? totalSize - file.size : 0
-                files.removeFirst()
+            var totalSize: UInt64 = 0
+            for file in files {
+                let (newSize, overflow) = totalSize.addingReportingOverflow(file.size)
+                totalSize = overflow ? .max : newSize
             }
+            files.removeAll { file in
+                guard totalSize > maximumTotalSizeBytes,
+                      remove(file, fileManager: fileManager) else {
+                    return false
+                }
+                totalSize = totalSize > file.size ? totalSize - file.size : 0
+                return true
+            }
+        }
+    }
+
+    private func remove(_ file: LogFileInfo, fileManager: FileManager) -> Bool {
+        do {
+            try fileManager.removeItem(at: file.url)
+            return true
+        } catch {
+            return false
         }
     }
 }

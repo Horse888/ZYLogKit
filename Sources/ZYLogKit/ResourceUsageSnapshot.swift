@@ -83,15 +83,20 @@ private extension ResourceUsageSnapshot {
         }
 
         defer {
+            for index in 0..<Int(threadCount) {
+                _ = mach_port_deallocate(mach_task_self_, threadList[index])
+            }
             let size = vm_size_t(Int(threadCount) * MemoryLayout<thread_t>.stride)
-            vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threadList), size)
+            _ = vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threadList), size)
         }
 
         var totalUsage: Double = 0
 
         for index in 0..<Int(threadCount) {
             var threadInfo = thread_basic_info()
-            var threadInfoCount = mach_msg_type_number_t(THREAD_INFO_MAX)
+            var threadInfoCount = mach_msg_type_number_t(
+                MemoryLayout<thread_basic_info_data_t>.stride / MemoryLayout<natural_t>.stride
+            )
 
             let infoResult = withUnsafeMutablePointer(to: &threadInfo) {
                 $0.withMemoryRebound(to: integer_t.self, capacity: Int(threadInfoCount)) {
